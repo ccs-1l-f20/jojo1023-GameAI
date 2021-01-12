@@ -14,7 +14,7 @@ Implementation possibilities:
 * Probably a desktop application with possibiliy of being to put a trained model on a website
 
 ## Bitmap to Vecor Graphics
-Develop some sort of algorithm that is able to convert bitmap formats like png to vector graphics like svg or eps possibly using machine learning. I have a far clearer picture of how this project would even go but it is really interesting and more practical than the previous idea. 
+Develop some sort of algorithm that is able to convert bitmap formats like png to vector graphics like svg or eps possibly using machine learning. I have a far less clear idea of how this project would even go but it is really interesting and more practical than the previous idea. 
 
 Misc Ideas:
 * Use edge detetion and other computer graphics techiques
