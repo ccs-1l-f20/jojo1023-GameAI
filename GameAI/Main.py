@@ -1,9 +1,10 @@
 from Game import *
+from Mcts import *
+from TkinterGui import *
 
-db = DotsAndBoxes(4)
 
-while True:
-    inpt = str(input())
-    db.PlayerMove(inpt)
-    if db.IsTerminal():
-        break
+boardSize = 3
+aiIsTrue = True
+gui = DotsAndBoxesGui(boardSize, aiIsTrue)
+
+gui.run()
