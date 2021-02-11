@@ -1,27 +1,17 @@
 # jojo1023-planning
 
 ## Game AI
-Deveolop a machine learning algorithm based off deepmind's AlphaZero that is able to learn how to play two player games of perfect information (Ex: chess, checkers ect..) simply by playing itself. While the ai will have some specific inputs/outputs based on the game it should be able to learn and hopefully beat some humans without any additonal human data. 
+Deveolop a machine learning algorithm based off deepmind's AlphaZero that is able to learn how to play two player games of perfect information (Ex: chess, checkers, dots and boxes, coridor ect..) simply by playing itself. While the ai will have some specific inputs/outputs based on the game it should be able to learn and hopefully beat some humans without any additonal human data. 
 
 Some notable components:
 * Neural Networks
 * Monte Carlo Search Trees
-* Minimax Trees
 
-Implementation possibilities:
+Implementation details:
 * In python that way I can easily integrate it with ML libraries like tensor flow but I might try to make my own ML lib from scratch.
-* In C# and possibly also python via pipes 
-* Probably a desktop application with possibiliy of being to put a trained model on a website
+* Start off with a desktop application with possibiliy of putting a trained model on a website
 
-https://deepmind.com/blog/article/alphazero-shedding-new-light-grand-games-chess-shogi-and-go
-https://kstatic.googleusercontent.com/files/2f51b2a749a284c2e2dfa13911da965f4855092a179469aedd15fbe4efe8f8cbf9c515ef83ac03a6515fa990e6f85fd827dcd477845e806f23a17845072dc7bd
+Article: https://deepmind.com/blog/article/alphazero-shedding-new-light-grand-games-chess-shogi-and-go
+Main Paper: https://kstatic.googleusercontent.com/files/2f51b2a749a284c2e2dfa13911da965f4855092a179469aedd15fbe4efe8f8cbf9c515ef83ac03a6515fa990e6f85fd827dcd477845e806f23a17845072dc7bd
 
-## Bitmap to Vector Graphics
-Develop some sort of algorithm that is able to convert bitmap formats like png to vector graphics like svg or eps possibly using machine learning. I have a far less clear idea of how this project would even go but it is really interesting and more practical than the previous idea. 
 
-Misc Ideas:
-* Use edge detetion and other computer graphics techiques
-* Have some sort of text detection and be able to find similar looking fonts
-* Break image up into small chunks that can be shaded using machine learning
-
-Implementation possibilities: See Game AI Implementation
