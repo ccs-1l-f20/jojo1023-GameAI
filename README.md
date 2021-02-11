@@ -1,4 +1,4 @@
-# jojo1023-planning
+# jojo1023-GameAI
 
 ## Game AI
 Deveolop a machine learning algorithm based off deepmind's AlphaZero that is able to learn how to play two player games of perfect information (Ex: chess, checkers, dots and boxes, coridor ect..) simply by playing itself. While the ai will have some specific inputs/outputs based on the game it should be able to learn and hopefully beat some humans without any additonal human data. 
