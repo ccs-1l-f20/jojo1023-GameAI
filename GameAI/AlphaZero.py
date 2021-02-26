@@ -1,105 +1,189 @@
+import queue
+from typing import List, Any, Tuple
+from AlphaZeroUtils import *
 from Mcts import *
 import keras
-from keras.models import Model
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import Activation
-from keras.layers import Input
-from keras.layers import concatenate
-from keras.utils import plot_model
-import pydot
-import os.path
-from os import path
-from keras.optimizers import Adam
 from keras.optimizers import SGD
+import numpy as np
+import threading
+import time
+import multiprocessing
 
 
-class GameStateStorage:
-    def __init__(self, currentPlayer, gameState, nextMoveProbs):
-        self.currentPlayer = currentPlayer
-        self.gameState = gameState
-        self.nextMoveProbs = nextMoveProbs
-        self.value = 0  # relative to current player
+# def initialize_shared(q):
+#     global gameStateQueue
+#     gameStateQueue=q
+doneGames = 0
+def PlayAlphaZeroGame(config: GameAiConfig, game: Game, stateEvaluator,
+                      index=-1, stopThreadPtr=None):
+    checkForStopThread = stopThreadPtr is not None
+    allMoves = game.GetAllPossibleMoves()
+    print("Pre Model: " + str(index))
+    # if self.nnStorage.HasBestModel():
+    #     stateEvaluator = NNStateEvaluator(self.nnStorage, allMoves)
+    # else:
+    #     stateEvaluator = RolloutMctsStateEvaluator()
+    print("Pre MCTS: " + str(index))
+    mcts = Mcts(config, stateEvaluator, False)
+    print("Post MCTS: " + str(index))
+    gameStates = []
+    turnCount = 0
+    while not game.IsTerminal():  # add max length
+        if checkForStopThread and stopThreadPtr[0]:
+            return None
+        cp = game.GetCurrentPlayer()
+        print("Move: " + str(turnCount) + " I: " + str(index))
+        (a, probsDict) = mcts.runSims(game, addNoise=True)
+        gs = game.GetBoardState(cp)
+        probs = []
+        for m in allMoves:
+            if m in probsDict:
+                probs.append(probsDict[m])
+            else:
+                probs.append(0)
+        gameStates.append(GameStateStorage(cp, gs, probs))
+        game.PlayMove(a)
+        turnCount += 1
+
+    gameValue = game.TerminalValue()
+    for gs in gameStates:
+        gs.value = (gameValue if gs.currentPlayer else -gameValue)
+    doneGames+=1
+    print("Done Games:" + str(doneGames))
+    return gameStates
 
 
 class AlphaZero:
     def __init__(self, config: GameAiConfig):
         self.config = config
-        self.currentNNPath = "currentNNPath.txt"
+        self.nnStorage = NNStorage()
+        # self.stateEvaluator = RolloutMctsStateEvaluator()
+        self.gameStateBatch = None
+        self.stopThreads = [False]
 
     def Start(self, game):
-        gameGameStates = []
+        self.gameStateBatch = GameStateBatch(self.config.gameBatchQueueSize, self.config.batchSize)
         allMoves = game.GetAllPossibleMoves()
-        for i in range(0, 500):
-            gameGameStates.append(self.PlayGame(game.Clone(), allMoves))
+        inputCount = len(game.GetBoardState(game.GetCurrentPlayer()))
+        outputCount = len(allMoves)
+        self.nnStorage.LoadBestModel(inputCount, outputCount)
+        self.gameStateBatch.LoadGames()
+        # self.NNThread(inputCount, outputCount)
+        # return
+        processArgs = []
+        pool = multiprocessing.Pool(10)  # , initializer=initialize_shared, initargs=(gameStatesQueue,)
+        for i in range(0, 1000):
+            allMovesCpy = game.GetAllPossibleMoves()
+            thisProcessArgs = (self.config, game.Clone(), RolloutMctsStateEvaluator(), i, self.stopThreads,)
+            processArgs.append(thisProcessArgs)
+            # t = threading.Thread(target=self.PlayGameThread, args=(game.Clone(), i), daemon=True)
+            # threads.append(t)
+            # t.start()
+        data = pool.starmap(PlayAlphaZeroGame, processArgs)
+        pool.close()
+        for d in data:
+            self.gameStateBatch.AddGameStates(d)
+        self.gameStateBatch.SaveGames()
+        # for a in processArgs:
+        #     a.join()
 
-        self.TrainNN(gameGameStates)
+        # nnThread = threading.Thread(target=self.NNThread, args=(gameStatesQueue, inputCount, outputCount), daemon=True)
+        # nnThread.start()
 
-    def PlayGame(self, game: Game, allMoves):
-        mcts = Mcts(self.config, False)
-        gameStates = []
-        while not game.IsTerminal():  # add max length
-            cp = game.GetCurrentPlayer()
-            (a, probsDict) = mcts.runSims(game, addNoise=True)
-            gs = game.GetBoardState(cp)
-            probs = []
-            for a in allMoves:
-                if a in probsDict:
-                    probs.append(probsDict[a])
-                else:
-                    probs.append(0)
-            gameStates.append(GameStateStorage(cp, gs, probs))
-            game.PlayMove(a)
+        # nnThread.join()
+        # inputThread = threading.Thread(target=self.InputThread, daemon=True)
+        # inputThread.start()
+        # print("Done Starting Game Threads")
 
-        gameValue = game.TerminalValue()
-        for gs in gameStates:
-            gs.value = (gameValue if gs.currentPlayer else -gameValue)
-        return gameStates
+    def NNThread(self, inputCount, outputCount):
+        amountOfGames = self.gameStateBatch.GetAmountOfGames()
+        while amountOfGames < 1000:
+            time.sleep(5)
+            # while not gameStatesQueue.empty():
+            #     gs = gameStatesQueue.get()
+            #     self.gameStateBatch.AddGameStates(gs)
 
-    def TrainNN(self, gameGameStates: list[list[GameStateStorage]]):
-        if len(gameGameStates) <= 0 or len(gameGameStates[0]) <= 0:
-            return
-        model = self.GetNewNN(len(gameGameStates[0][0].gameState), len(gameGameStates[0][0].nextMoveProbs))
-        if path.exists(self.currentNNPath):
-            currentNNWeightsFilePath = open(self.currentNNPath, "w+")
-        else:
-            currentNNWeightsFilePath = open(self.currentNNPath, "a+")
+            amountOfGames = self.gameStateBatch.GetAmountOfGames()
+            print("Amount of Games: " + str(amountOfGames) + "||||||||||||||||||||||||")
 
-        opt = SGD(learning_rate=self.config.learning_rate_schedule[0], momentum=self.config.momentum)
-        lrScheduleCallback = keras.callbacks.LearningRateScheduler(self.config.learning_rate_schedule)
+        self.TrainNN(self.gameStateBatch, self.nnStorage, inputCount, outputCount)
 
+    def InputThread(self):
+        while True:
+            s = input()
+            if s == 'save':
+                self.stopThreads = [True]
+                print("Threads Flagged to Stop !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                time.sleep(5)
+                self.gameStateBatch.SaveGames()
+
+    def PlayGameThread(self, game, index):
+        for i in range(0, 100):
+            allMoves = game.GetAllPossibleMoves()
+            print("Start: " + str(index) + " Game: " + str(i))
+            gameClone = game.Clone()
+            returnMpValue = []
+            p = multiprocessing.Process(target=PlayAlphaZeroGame,
+                                        args=(self.config, gameClone, allMoves, RolloutMctsStateEvaluator(),
+                                              returnMpValue, index, self.stopThreads), daemon=True)
+            p.start()
+            p.join()
+            p.close()
+            if self.stopThreads[0]:
+                return
+            # returnGmeStates = returnMpValue.value
+            if returnMpValue is None:
+                continue
+            self.gameStateBatch.AddGameStates(returnMpValue)
+            print("End: " + str(index) + " Game: " + str(i))
+
+    def GetMove(self, game, verbose):
+        allMoves = game.GetAllPossibleMoves()
+        evaluator = NNStateEvaluator(self.nnStorage, allMoves) if self.nnStorage.HasBestModel() \
+            else RolloutMctsStateEvaluator()
+        mcts = Mcts(self.config, evaluator, verbose)
+
+        (a, probsDict) = mcts.runSims(game, addNoise=True)
+        return a
+
+    def TrainNN(self, gameStateBatch: GameStateBatch, nnStorage: NNStorage, inputCount, outputCount):
+        if not nnStorage.HasBestModel():
+            nnStorage.CreateNewModel(inputCount, outputCount)
+
+        model = nnStorage.GetBestModelCopy()
+
+        lrSchedule = self.config.learning_rate_schedule
+        maxLrIndex = 0
+        for i in lrSchedule.keys():
+            if nnStorage.currentEpoch >= i > maxLrIndex:
+                maxLrIndex = i
+
+        opt = SGD(learning_rate=lrSchedule[maxLrIndex], momentum=self.config.momentum)
         model.compile(optimizer=opt, loss={'valueOutput': 'mse', 'policyOutput': 'categorical_crossentropy'},
+                      loss_weights={'valueOutput': 1, 'policyOutput': 1},
                       metrics={'valueOutput': 'mae', 'policyOutput': 'accuracy'})
 
-        model.train_on_batch(x=sdf, y=dsf)
-        currentNNWeightsFilePath.close()
-    def GetNNBatch(self, gameGameStates: list[list[GameStateStorage]]):
-        pass
+        (inputs, pOut, vOut) = gameStateBatch.GetAllBatch()
+        model.evaluate(x=inputs, y={'valueOutput': vOut, 'policyOutput': pOut})
 
+        for i in range(nnStorage.currentEpoch, self.config.amountOfTrainingSteps):
+            if i in lrSchedule:
+                keras.backend.set_value(model.optimizer.learning_rate, lrSchedule[i])
+            print("Pre Get Batch:" + str(i) + "----------------------------------------------------")
+            (inputs, pOut, vOut) = gameStateBatch.GetBatch()
+            print("Post Get Batch:" + str(i) + "----------------------------------------------------")
+            model.fit(x=inputs, y={'valueOutput': vOut, 'policyOutput': pOut}, epochs=i + 1, initial_epoch=i,
+                      batch_size=len(inputs), verbose=2)
+            print("Post Fit Batch:" + str(i) + "----------------------------------------------------")
+            print(keras.backend.eval(model.optimizer.lr))
+            # print(model.evaluate(x=inputs, y={'valueOutput': vOut, 'policyOutput': pOut}))
+            if i % self.config.checkpointInterval == 0:
+                nnStorage.NewModel(model, i, "")
+                # (inputs, pOut, vOut) = gameStateBatch.GetAllBatch()
+                # model.evaluate(x=inputs, y={'valueOutput': vOut, 'policyOutput': pOut})
+                print("Stored Model " + str(i))
 
-    def GetNewNN(self, inputCount, outputCount):
-        inL = Input(shape=(inputCount,))
-
-        hidden = Dense(50, activation='tanh')(inL)
-        hidden = Dense(50, activation='relu')(hidden)
-        hidden = Dense(30, activation='tanh')(hidden)
-        hidden = Dense(30, activation='relu')(hidden)
-
-        hiddenV = Dense(15, activation='tanh')(hidden)
-        hiddenV = Dense(5, activation='tanh')(hiddenV)
-        outV = Dense(1, activation='tanh', name='valueOutput')(hiddenV)
-
-        hiddenP = Dense(30, activation='relu')(hidden)
-        hiddenP = Dense(30, activation='tanh')(hiddenP)
-        outP = Dense(outputCount, activation='softmax', name='policyOutput')(hiddenP)
-
-        model = Model(inputs=inL, outputs=[outV, outP])
-        print(model.summary())
-        # plot_model(model, to_file='multiple_outputs.png')
-        return model
-
-
-az = AlphaZero(GameAiConfig())
-db = DotsAndBoxes(3)
-az.TrainNN(None)
-az.GetNewNN(len(db.GetBoardState(True)), len(db.GetAllPossibleMoves()))
+# az = AlphaZero(GameAiConfig())
+# db = DotsAndBoxes(3)
+# az.TrainNN(None)
+# az.GetNewNN(len(db.GetBoardState(True)), len(db.GetAllPossibleMoves()))

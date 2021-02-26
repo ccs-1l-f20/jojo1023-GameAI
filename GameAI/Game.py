@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import List, Any, Tuple
 
 
 class Game(ABC):
@@ -34,7 +35,7 @@ class Game(ABC):
         pass
 
     @abstractmethod
-    def GetBoardState(self, player):
+    def GetBoardState(self, player) -> List[float]:
         pass
 
     @abstractmethod

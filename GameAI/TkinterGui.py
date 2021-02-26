@@ -1,6 +1,7 @@
 import tkinter as tk
 import threading
 from Mcts import *
+from AlphaZero import *
 
 class TkinterGui:
     def __init__(self):
@@ -15,7 +16,7 @@ class TkinterGui:
 
 
 class DotsAndBoxesGui(TkinterGui):
-    def __init__(self, boardSize, aiIsTrue):
+    def __init__(self, boardSize, aiIsTrue, useNN):
         self.boardSize = boardSize
         self.aiIsTrue = aiIsTrue
         self.boxes = []
@@ -24,7 +25,14 @@ class DotsAndBoxesGui(TkinterGui):
         self.buttonsByMove = {}
 
         self.db = DotsAndBoxes(boardSize)
-        self.mcts = Mcts(GameAiConfig(), True)
+        self.nnStorage = NNStorage()
+        self.nnStorage.LoadBestModel(len(self.db.GetBoardState(True)), len(self.db.GetAllPossibleMoves()))
+        if useNN:
+            evaluator = NNStateEvaluator(self.nnStorage, self.db.GetAllPossibleMoves())
+        else:
+            evaluator = RolloutMctsStateEvaluator()
+        self.mcts = Mcts(GameAiConfig(), evaluator, True)
+        self.alphaZero = AlphaZero(GameAiConfig())
         self.defaultButtonColor = 'gray'
         self.disabledButtonColor = 'dim gray'
         super().__init__()
